@@ -1,12 +1,5 @@
-import gymnasium as gym
-import ale_py
+from environment import Environment
 
-gym.register_envs(ale_py)
-
-env = gym.make('ALE/Othello-v5')
-
-print("Observation space:", env.observation_space)
-
-print("action space: ", env.action_space)
+env = Environment(env_name="ALE/Othello-v5", render_mode="human")
 
 env.close()
