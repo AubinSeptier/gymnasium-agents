@@ -48,4 +48,14 @@ class Environment(gym.Env):
         """
         self.env.close()
         
+    def get_space(self):
+        """
+        Get the observation and action space of the environment.
+        
+        Returns:
+            observation_space (ObsType): the observation space of the environment.
+            action_space (ActType): the action space of the environment.
+        """
+        return self.observation_space, self.action_space
+        
         
