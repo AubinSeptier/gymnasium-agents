@@ -6,6 +6,6 @@ class Node:
         pass
     
 
-class MCTS:
+class MCTS(Node):
     def __init__(self):
         pass
