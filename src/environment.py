@@ -41,5 +41,11 @@ class Environment(gym.Env):
             observation (ObsType): the initial observation of the space.
         """
         return self.env.reset(seed=seed, options=options)
+    
+    def close(self):
+        """
+        Close the environment and free resources.
+        """
+        self.env.close()
         
         
