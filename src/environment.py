@@ -2,12 +2,16 @@ import gymnasium as gym
 import ale_py
 
 class Environment(gym.Env):
+    """
+    Class for manage the environment.
+    
+    Attributes:
+        env (gym.Env): the gymnasium environment.
+        observation_space (ObsType): the observation space of the environment.
+        action_space (ActType): the action space of the environment.
+    """
+    
     def __init__(self, env_name: str, render_mode: str = None):
-        """
-        Args:
-            env_name (str): the name of the environment to create.
-            render_mode (str): the mode to render the environment in.
-        """
         gym.register_envs(ale_py)
         self.env = gym.make(env_name, render_mode=render_mode)
         self.observation_space = self.env.observation_space
