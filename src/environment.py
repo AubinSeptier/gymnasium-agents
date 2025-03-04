@@ -31,6 +31,8 @@ class Environment(gym.Env):
             truncated (bool): whether the episode has been truncated.
             info (dict): contains auxiliary information.
         """
+        for i in range(3):
+            temp = self.env.step(action)
         return self.env.step(action)
     
     def reset(self, seed=None, options=None):
