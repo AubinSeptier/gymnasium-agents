@@ -12,7 +12,7 @@ class DQNModel(nn.Module):
     def __init__(self, state_shape: Tuple[int, int] = (BOARD_SIZE, BOARD_SIZE), action_size: int = BOARD_SIZE * BOARD_SIZE):
         super(DQNModel, self).__init__()
         
-        # Couches convolutives pour traiter le plateau
+        # Convolutional layers to process the board
         self.conv1 = nn.Conv2d(1, 64, kernel_size=3, padding=1)
         self.bn1 = nn.BatchNorm2d(64)
         self.conv2 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
@@ -20,35 +20,35 @@ class DQNModel(nn.Module):
         self.conv3 = nn.Conv2d(128, 128, kernel_size=3, padding=1)
         self.bn3 = nn.BatchNorm2d(128)
         
-        # Calcul de la dimension après convolution
+        # Calculate the dimension after convolution
         conv_output_size = 128 * state_shape[0] * state_shape[1]
         
-        # Couches denses
-        self.fc1 = nn.Linear(conv_output_size + action_size + 1, 256)  # +action_size pour les mouvements valides, +1 pour le joueur
+        # Dense layers
+        self.fc1 = nn.Linear(conv_output_size + action_size + 1, 256)  # +action_size for valid moves, +1 for player
         self.bn4 = nn.BatchNorm1d(256)
         self.fc2 = nn.Linear(256, 128)
         self.fc3 = nn.Linear(128, action_size)
     
     def forward(self, board, valid_moves, player):
-        # Traitement du plateau par CNN
+        # Process the board by CNN
         x = F.relu(self.bn1(self.conv1(board)))
         x = F.relu(self.bn2(self.conv2(x)))
         x = F.relu(self.bn3(self.conv3(x)))
-        x = x.view(x.size(0), -1)  # Aplatir
+        x = x.view(x.size(0), -1)  # Flatten
         
-        # Concaténation avec les mouvements valides et le joueur actuel
+        # Concatenate with valid moves and current player
         x = torch.cat([x, valid_moves, player], dim=1)
         
-        # Couches denses
+        # Dense layers
         x = F.relu(self.bn4(self.fc1(x)))
         x = F.relu(self.fc2(x))
         q_values = self.fc3(x)
         
-        # Application du masque pour interdire les actions invalides
+        # Apply mask to forbid invalid actions
         masked_q_values = torch.where(
             valid_moves.bool(),
             q_values,
-            torch.ones_like(q_values) * (-1e9)  # Valeur très basse pour les mouvements invalides
+            torch.ones_like(q_values) * (-1e9)  # Very low value for invalid moves
         )
         
         return masked_q_values
@@ -71,65 +71,65 @@ class DQNAgent:
         self.state_shape = state_shape
         self.action_size = action_size
         self.memory = deque(maxlen=memory_size)
-        self.gamma = gamma  # Facteur de réduction
-        self.epsilon = epsilon  # Paramètre d'exploration
-        self.epsilon_min = epsilon_min  # Epsilon minimal
-        self.epsilon_decay = epsilon_decay  # Taux de décroissance d'epsilon
-        self.learning_rate = learning_rate  # Taux d'apprentissage
-        self.batch_size = batch_size  # Taille du batch
-        self.update_target_freq = update_target_freq  # Fréquence de mise à jour du réseau cible
+        self.gamma = gamma  # Discount factor
+        self.epsilon = epsilon  # Exploration parameter
+        self.epsilon_min = epsilon_min  # Minimum epsilon
+        self.epsilon_decay = epsilon_decay  # Epsilon decay rate
+        self.learning_rate = learning_rate  # Learning rate
+        self.batch_size = batch_size  # Batch size
+        self.update_target_freq = update_target_freq  # Target network update frequency
         
-        # Vérifier si CUDA est disponible
+        # Check if CUDA is available
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
-        # Compteur d'étapes
+        # Step counter
         self.step_counter = 0
         
-        # Modèles
+        # Models
         self.model = DQNModel(state_shape, action_size).to(self.device)
         self.target_model = DQNModel(state_shape, action_size).to(self.device)
-        self.update_target_model()  # Synchroniser les deux modèles
+        self.update_target_model()  # Synchronize the two models
         
-        # Optimiseur
+        # Optimizer
         self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
         
-        # Fonction de perte
+        # Loss function
         self.criterion = nn.MSELoss()
         
-        # Nom pour l'identification
+        # Name for identification
         self.name = "DQN"
     
     def update_target_model(self) -> None:
-        """Met à jour le modèle cible avec les poids du modèle principal."""
+        """Updates the target model with the weights of the main model."""
         self.target_model.load_state_dict(self.model.state_dict())
     
     def preprocess_state(self, obs: Dict[str, np.ndarray]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Prétraite l'observation pour le réseau de neurones."""
-        # Normaliser le plateau (-1, 0, 1) -> (-1, 0, 1)
+        """Preprocesses the observation for the neural network."""
+        # Normalize the board (-1, 0, 1) -> (-1, 0, 1)
         board = torch.tensor(obs["board"], dtype=torch.float32).reshape(1, 1, *self.state_shape).to(self.device)
         
-        # Mouvements valides
+        # Valid moves
         valid_moves = torch.tensor(obs["valid_moves"], dtype=torch.float32).reshape(1, -1).to(self.device)
         
-        # Joueur actuel
+        # Current player
         player = torch.tensor([1.0 if obs["current_player"] == 0 else -1.0], dtype=torch.float32).reshape(1, 1).to(self.device)
         
         return board, valid_moves, player
     
     def remember(self, state: Dict[str, np.ndarray], action: int, reward: float, 
                 next_state: Dict[str, np.ndarray], done: bool) -> None:
-        """Stocke l'expérience en mémoire."""
+        """Stores the experience in memory."""
         self.memory.append((state, action, reward, next_state, done))
     
     def choose_action(self, env: OthelloEnv) -> int:
-        """Choisit une action selon la politique epsilon-greedy."""
+        """Chooses an action according to the epsilon-greedy policy."""
         obs = env._get_observation()
         
-        # Mouvements valides
+        # Valid moves
         valid_moves = obs["valid_moves"]
         valid_actions = [i for i, is_valid in enumerate(valid_moves) if is_valid == 1]
         
-        # S'il n'y a pas de mouvements valides, retourne 0 (action par défaut)
+        # If there are no valid moves, return 0 (default action)
         if not valid_actions:
             return 0
         
@@ -145,20 +145,20 @@ class DQNAgent:
             q_values = self.model(*state).cpu().numpy()[0]
         self.model.train()
         
-        # Trouve l'action valide avec la plus grande Q-valeur
+        # Find the valid action with the highest Q-value
         return int(np.argmax(q_values))
     
     def replay(self) -> float:
-        """Entraîne le modèle sur un batch d'expériences."""
+        """Trains the model on a batch of experiences."""
         if len(self.memory) < self.batch_size:
             return 0.0
         
-        # Échantillonner un batch de la mémoire
+        # Sample a batch from memory
         minibatch = random.sample(self.memory, self.batch_size)
         
         total_loss = 0.0
         
-        # Préparer les tenseurs par lots
+        # Prepare batch tensors
         states_boards = []
         states_valid_moves = []
         states_players = []
@@ -170,7 +170,7 @@ class DQNAgent:
         dones = []
         
         for state, action, reward, next_state, done in minibatch:
-            # Prétraiter les états
+            # Preprocess states
             board, valid_moves, player = self.preprocess_state(state)
             
             states_boards.append(board)
@@ -179,7 +179,7 @@ class DQNAgent:
             actions.append(action)
             rewards.append(reward)
             
-            # Prétraiter les états suivants
+            # Preprocess next states
             next_board, next_valid_moves, next_player = self.preprocess_state(next_state)
             
             next_states_boards.append(next_board)
@@ -187,7 +187,7 @@ class DQNAgent:
             next_states_players.append(next_player)
             dones.append(done)
         
-        # Convertir en tenseurs batch
+        # Convert to batch tensors
         states_boards = torch.cat(states_boards, dim=0)
         states_valid_moves = torch.cat(states_valid_moves, dim=0)
         states_players = torch.cat(states_players, dim=0)
@@ -198,87 +198,315 @@ class DQNAgent:
         next_states_players = torch.cat(next_states_players, dim=0)
         dones = torch.tensor(dones, dtype=torch.float32).to(self.device)
         
-        # Prédire les Q-valeurs pour les états actuels
+        # Predict Q-values for current states
         self.model.train()
         current_q_values = self.model(states_boards, states_valid_moves, states_players)
         
-        # Sélectionner les Q-valeurs pour les actions prises
+        # Select Q-values for the taken actions
         current_q_values = current_q_values.gather(1, actions.unsqueeze(1)).squeeze(1)
         
-        # Calculer les Q-valeurs cibles
+        # Calculate target Q-values
         with torch.no_grad():
             next_q_values = self.target_model(next_states_boards, next_states_valid_moves, next_states_players)
             max_next_q_values = next_q_values.max(1)[0]
             target_q_values = rewards + (1 - dones) * self.gamma * max_next_q_values
         
-        # Calculer la perte
+        # Calculate loss
         loss = self.criterion(current_q_values, target_q_values)
         
-        # Mettre à jour les poids
+        # Update weights
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
         
-        # Réduire epsilon (exploration)
+        # Reduce epsilon (exploration)
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
         
-        # Mettre à jour le modèle cible périodiquement
+        # Update target model periodically
         self.step_counter += 1
         if self.step_counter % self.update_target_freq == 0:
             self.update_target_model()
         
         return loss.item()
     
-    def train(self, env: OthelloEnv, num_episodes: int = 100) -> Tuple[List[float], List[float]]:
-        """Entraîne l'agent sur un certain nombre d'épisodes et retourne les récompenses et les pertes."""
+    # def train(self, env: OthelloEnv, num_episodes: int = 100, 
+    #           opponents: Dict[str, Any] = None, opponent_probs: Dict[str, float] = None) -> Tuple[List[float], List[float]]:
+    #     """Trains the agent against specified opponents for a number of episodes.
+        
+    #     Args:
+    #         env: The environment to train in
+    #         num_episodes: Number of training episodes
+    #         opponents: Dict mapping names to opponent agents (use 'self' for self-play)
+    #         opponent_probs: Dict mapping names to probability of facing that opponent
+            
+    #     Returns:
+    #         Tuple of (rewards, losses) lists
+    #     """
+    #     if opponents is None:
+    #         opponents = {'self': self}  # Default to self-play
+        
+    #     if opponent_probs is None:
+    #         # Equal probability for each opponent
+    #         opponent_probs = {name: 1.0 / len(opponents) for name in opponents}
+        
+    #     # Normalize probabilities
+    #     total_prob = sum(opponent_probs.values())
+    #     opponent_probs = {name: prob / total_prob for name, prob in opponent_probs.items()}
+        
+    #     # Convert to cumulative probabilities for easy sampling
+    #     opponent_names = list(opponent_probs.keys())
+    #     cum_probs = np.cumsum([opponent_probs[name] for name in opponent_names])
+        
+    #     rewards = []
+    #     losses = []
+    #     opponent_counts = {name: 0 for name in opponent_names}
+        
+    #     for episode in range(num_episodes):
+    #         # Reset the environment
+    #         state, _ = env.reset()
+    #         total_reward = 0
+    #         episode_losses = []
+    #         done = False
+            
+    #         # Select an opponent for this episode
+    #         rand_val = np.random.random()
+    #         opponent_idx = np.searchsorted(cum_probs, rand_val)
+    #         opponent_name = opponent_names[opponent_idx]
+    #         opponent = opponents[opponent_name]
+    #         opponent_counts[opponent_name] += 1
+            
+    #         # Skip if the opponent is 'self' (self-play)
+    #         is_self_play = opponent_name == 'self'
+            
+    #         # Randomly determine if DQN plays as BLACK (0) or WHITE (1)
+    #         dqn_player = np.random.choice([0, 1])  # 0 = BLACK, 1 = WHITE
+            
+    #         while not done:
+    #             current_player = state["current_player"]
+                
+    #             if current_player == dqn_player:  # DQN's turn
+    #                 # Choose an action
+    #                 action = self.choose_action(env)
+                    
+    #                 # Execute the action
+    #                 next_state, reward, terminated, truncated, _ = env.step(action)
+    #                 done = terminated or truncated
+                    
+    #                 # Store the experience
+    #                 self.remember(state, action, reward, next_state, done)
+                    
+    #                 # Learning
+    #                 loss = self.replay()
+    #                 if loss > 0:
+    #                     episode_losses.append(loss)
+                    
+    #                 # Update reward
+    #                 total_reward += reward
+                
+    #             else:  # Opponent's turn
+    #                 if is_self_play:
+    #                     # In self-play, use the DQN agent but with a different player perspective
+    #                     action = self.choose_action(env)
+    #                 else:
+    #                     # Let the opponent choose an action
+    #                     action = opponent.choose_action(env)
+                    
+    #                 # Execute the action
+    #                 next_state, reward, terminated, truncated, _ = env.step(action)
+    #                 done = terminated or truncated
+                
+    #             # Update the state
+    #             state = next_state
+            
+    #         # Record results
+    #         rewards.append(total_reward)
+    #         avg_loss = np.mean(episode_losses) if episode_losses else 0
+    #         losses.append(avg_loss)
+            
+    #         # Display progress
+    #         if (episode + 1) % 10 == 0:
+    #             opponent_str = ", ".join([f"{name}: {count}" for name, count in opponent_counts.items()])
+    #             print(f"Episode {episode + 1}/{num_episodes}, Opponents: {opponent_str}, "
+    #                   f"Reward: {total_reward:.2f}, Loss: {avg_loss:.4f}, Epsilon: {self.epsilon:.4f}")
+    #             # Reset the opponent counts after displaying
+    #             opponent_counts = {name: 0 for name in opponent_names}
+        
+    #     return rewards, losses
+
+    def train(self, env: OthelloEnv, num_episodes: int = 100, 
+          opponents: Dict[str, Any] = None, opponent_probs: Dict[str, float] = None) -> Tuple[List[float], List[float]]:
+        """Trains the agent against specified opponents for a number of episodes.
+        
+        Args:
+            env: The environment to train in
+            num_episodes: Number of training episodes
+            opponents: Dict mapping names to opponent agents (use 'self' for self-play)
+            opponent_probs: Dict mapping names to probability of facing that opponent
+            
+        Returns:
+            Tuple of (rewards, losses) lists
+        """
+        if opponents is None:
+            opponents = {'self': self}  # Default to self-play
+        
+        if opponent_probs is None:
+            # Equal probability for each opponent
+            opponent_probs = {name: 1.0 / len(opponents) for name in opponents}
+        
+        # Normalize probabilities
+        total_prob = sum(opponent_probs.values())
+        opponent_probs = {name: prob / total_prob for name, prob in opponent_probs.items()}
+        
+        # Convert to cumulative probabilities for easy sampling
+        opponent_names = list(opponent_probs.keys())
+        cum_probs = np.cumsum([opponent_probs[name] for name in opponent_names])
+        
         rewards = []
         losses = []
+        opponent_counts = {name: 0 for name in opponent_names}
+        
+        # Store original learning rate
+        original_lr = self.learning_rate
+        
+        # Implement curriculum learning
+        self_play_start_prob = 0.95  # Start with 95% self-play
+        self_play_end_prob = opponent_probs.get('self', 0.0)  # End with the specified probability
         
         for episode in range(num_episodes):
-            # Réinitialiser l'environnement
+            # Implement curriculum learning - gradually decrease self-play probability
+            if 'self' in opponent_probs and episode < num_episodes / 2:
+                # Only adjust during first half of training
+                progress = episode / (num_episodes / 2)
+                current_self_prob = self_play_start_prob - progress * (self_play_start_prob - self_play_end_prob)
+                
+                # Adjust other probabilities proportionally
+                current_probs = {}
+                non_self_prob = 1.0 - current_self_prob
+                
+                for name in opponent_names:
+                    if name == 'self':
+                        current_probs[name] = current_self_prob
+                    else:
+                        # Distribute remaining probability proportionally
+                        orig_relative_prob = opponent_probs[name] / (1.0 - opponent_probs.get('self', 0.0) + 1e-10)
+                        current_probs[name] = non_self_prob * orig_relative_prob
+                
+                # Recompute cumulative probabilities
+                cum_probs = np.cumsum([current_probs[name] for name in opponent_names])
+                
+                # Adjust learning rate - start lower and gradually increase
+                # This helps with the initial instability when facing strong opponents
+                lr_factor = 0.1 + 0.9 * progress
+                self.learning_rate = original_lr * lr_factor
+                for param_group in self.optimizer.param_groups:
+                    param_group['lr'] = self.learning_rate
+            
+            # Reset the environment
             state, _ = env.reset()
             total_reward = 0
             episode_losses = []
             done = False
             
-            while not done:
-                # Choisir une action
-                action = self.choose_action(env)
-                
-                # Exécuter l'action
-                next_state, reward, terminated, truncated, _ = env.step(action)
-                done = terminated or truncated
-                
-                # Stocker l'expérience
-                self.remember(state, action, reward, next_state, done)
-                
-                # Apprentissage
-                loss = self.replay()
-                if loss > 0:
-                    episode_losses.append(loss)
-                
-                # Mettre à jour l'état
-                state = next_state
-                total_reward += reward
+            # Select an opponent for this episode
+            rand_val = np.random.random()
+            opponent_idx = np.searchsorted(cum_probs, rand_val)
+            opponent_name = opponent_names[opponent_idx]
+            opponent = opponents[opponent_name]
+            opponent_counts[opponent_name] += 1
             
-            # Enregistrer les résultats
+            # Skip if the opponent is 'self' (self-play)
+            is_self_play = opponent_name == 'self'
+            
+            # Randomly determine if DQN plays as BLACK (0) or WHITE (1)
+            dqn_player = np.random.choice([0, 1])  # 0 = BLACK, 1 = WHITE
+            
+            # Gradient clipping threshold - helps prevent exploding gradients
+            clip_value = 1.0
+            
+            while not done:
+                current_player = state["current_player"]
+                
+                if current_player == dqn_player:  # DQN's turn
+                    # Choose an action
+                    action = self.choose_action(env)
+                    
+                    # Execute the action
+                    next_state, reward, terminated, truncated, _ = env.step(action)
+                    done = terminated or truncated
+                    
+                    # Apply reward scaling - helps stabilize learning
+                    scaled_reward = reward * 0.05  # Scale down rewards to prevent large updates
+                    
+                    # Store the experience
+                    self.remember(state, action, scaled_reward, next_state, done)
+                    
+                    # Learning - but only update every few steps to stabilize learning
+                    if len(self.memory) >= self.batch_size:  # Skip immediate learning in first episode
+                        loss = self.replay()
+                        
+                        # Implement gradient clipping during backward pass
+                        for param in self.model.parameters():
+                            if param.grad is not None:
+                                param.grad.data.clamp_(-clip_value, clip_value)
+                                
+                        if loss > 0:
+                            episode_losses.append(loss)
+                    
+                    # Update reward
+                    total_reward += reward
+                
+                else:  # Opponent's turn
+                    if is_self_play:
+                        # In self-play, use the DQN agent but with a different player perspective
+                        action = self.choose_action(env)
+                    else:
+                        # Let the opponent choose an action
+                        action = opponent.choose_action(env)
+                    
+                    # Execute the action
+                    next_state, reward, terminated, truncated, _ = env.step(action)
+                    done = terminated or truncated
+                    
+                    # Learn from opponent moves too (but only after some initial learning)
+                    # The key insight: DQN learns to play as whoever the current player is
+                    # So we don't invert the reward - we use it directly as provided by the environment
+                    if not is_self_play and episode > num_episodes / 4:
+                        scaled_reward = reward * 0.05
+                        self.remember(state, action, scaled_reward, next_state, done)
+                
+                # Update the state
+                state = next_state
+
+                # In self-play, we count rewards for all moves
+                if is_self_play:
+                    total_reward += reward
+            
+            # Record results
             rewards.append(total_reward)
             avg_loss = np.mean(episode_losses) if episode_losses else 0
             losses.append(avg_loss)
             
-            # Afficher la progression
+            # Display progress
             if (episode + 1) % 10 == 0:
-                print(f"Épisode {episode + 1}/{num_episodes}, Récompense: {total_reward:.2f}, "
-                      f"Perte: {avg_loss:.4f}, Epsilon: {self.epsilon:.4f}")
+                opponent_str = ", ".join([f"{name}: {count}" for name, count in opponent_counts.items()])
+                print(f"Episode {episode + 1}/{num_episodes}, Opponents: {opponent_str}, "
+                    f"Reward: {total_reward:.2f}, Loss: {avg_loss:.4f}, Epsilon: {self.epsilon:.4f}")
+                # Reset the opponent counts after displaying
+                opponent_counts = {name: 0 for name in opponent_names}
+        
+        # Restore original learning rate
+        self.learning_rate = original_lr
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = self.learning_rate
         
         return rewards, losses
     
     def save(self, filename: str) -> None:
-        """Sauvegarde le modèle et les paramètres de l'agent."""
+        """Saves the model and agent parameters."""
         torch.save(self.model.state_dict(), filename + ".pt")
         
-        # Sauvegarder les paramètres supplémentaires
+        # Save additional parameters
         import pickle
         with open(filename + ".pkl", 'wb') as f:
             pickle.dump({
@@ -292,12 +520,12 @@ class DQNAgent:
             }, f)
     
     def load(self, filename: str) -> None:
-        """Charge le modèle et les paramètres de l'agent."""
-        # Charger le modèle
+        """Loads the model and agent parameters."""
+        # Load the model
         self.model.load_state_dict(torch.load(filename + ".pt"))
         self.target_model.load_state_dict(torch.load(filename + ".pt"))
         
-        # Charger les paramètres
+        # Load parameters
         import pickle
         with open(filename + ".pkl", 'rb') as f:
             params = pickle.load(f)

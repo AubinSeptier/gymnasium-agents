@@ -3,7 +3,7 @@ from Env.env import OthelloEnv
 
 
 def evaluate_agent(agent, opponent, num_games=100, render=False):
-    """Évalue un agent contre un adversaire sur plusieurs parties."""
+    """Evaluates an agent against an opponent over multiple games."""
     env = OthelloEnv()
     wins = 0
     losses = 0
@@ -11,40 +11,40 @@ def evaluate_agent(agent, opponent, num_games=100, render=False):
     total_rewards = 0
     
     for game in tqdm(range(num_games), desc=f"{agent.name} vs {opponent.name}"):
-        # Réinitialiser l'environnement
+        # Reset the environment
         obs, _ = env.reset()
         done = False
         game_reward = 0
         
-        # Jouer la partie
+        # Play the game
         while not done:
-            # Déterminer quel agent joue (BLACK commence)
+            # Determine which agent plays (BLACK starts)
             current_player = obs["current_player"]
-            current_agent = agent if current_player == 0 else opponent  # 0 pour BLACK, 1 pour WHITE
+            current_agent = agent if current_player == 0 else opponent  # 0 for BLACK, 1 for WHITE
             
-            # Choisir une action
+            # Choose an action
             action = current_agent.choose_action(env)
             
-            # Exécuter l'action
+            # Execute the action
             obs, reward, terminated, truncated, info = env.step(action)
             done = terminated or truncated
             
-            # Accumuler la récompense (du point de vue de l'agent évalué)
-            if current_player == 0:  # Si c'est notre agent qui a joué
+            # Accumulate the reward (from the perspective of the evaluated agent)
+            if current_player == 0:  # If our agent played
                 game_reward += reward
         
-        # Analyser le résultat
+        # Analyze the result
         black_count, white_count = env._get_score()
-        if black_count > white_count:  # BLACK a gagné
+        if black_count > white_count:  # BLACK won
             wins += 1
-        elif white_count > black_count:  # WHITE a gagné
+        elif white_count > black_count:  # WHITE won
             losses += 1
-        else:  # Match nul
+        else:  # Draw
             draws += 1
         
         total_rewards += game_reward
     
-    # Calculer les statistiques
+    # Calculate statistics
     win_rate = wins / num_games
     avg_reward = total_rewards / num_games
     

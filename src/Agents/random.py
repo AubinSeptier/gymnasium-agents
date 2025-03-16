@@ -5,14 +5,14 @@ class RandomAgent:
         self.name = "Random"
     
     def choose_action(self, env):
-        """Choisit aléatoirement une action parmi les coups valides."""
-        # Récupérer les coups valides
+        """Randomly chooses an action from valid moves."""
+        # Get valid moves
         obs = env._get_observation()
         valid_moves = [i for i, is_valid in enumerate(obs["valid_moves"]) if is_valid == 1]
         
-        # Si aucun coup valide, retourner une action par défaut
+        # If no valid moves, return a default action
         if not valid_moves:
             return 0
         
-        # Retourner un coup aléatoire
+        # Return a random move
         return random.choice(valid_moves)
