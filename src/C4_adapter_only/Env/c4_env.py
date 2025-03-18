@@ -73,19 +73,20 @@ class ConnectFourEnv(gym.Env):
     def step(self, action: int) -> Tuple[Dict[str, np.ndarray], float, bool, bool, Dict[str, Any]]:
         # Action is the column (0-6) where the piece will be dropped
         col = action
-        reward = 0
-        
+        reward = 0  #  Explicitly initialize reward
+
         # Check if the action is valid
         if not self._is_valid_move(col):
             # Invalid action, end the episode with negative reward
-            return self._get_observation(), -10.0, False, True, {"info": "Invalid move"}
-        
+            reward = -10.0
+            return self._get_observation(), float(reward), False, True, {"info": "Invalid move"}
+
         # Find the row where the piece will land
         row = self._get_next_open_row(col)
-        
+
         # Place the piece
         self.board[row][col] = self.current_player
-        
+
         # Check if the current player won
         if self._check_win(row, col):
             self.done = True
@@ -96,25 +97,26 @@ class ConnectFourEnv(gym.Env):
                 self.cumulative_rewards["RED"] += reward
             else:
                 self.cumulative_rewards["YELLOW"] += reward
-                
-            # Return observation, reward, done flags, and info
+
             return self._get_observation(), float(reward), True, False, {
                 "winner": "RED" if self.current_player == RED else "YELLOW"
             }
-        
+
         # Check if board is full (draw)
         if np.all(self.board != EMPTY):
             self.done = True
-            return self._get_observation(), 0.0, True, False, {"winner": "DRAW"}
-        
+            reward = 0.0  #  Explicitly set reward for draws
+            return self._get_observation(), float(reward), True, False, {"winner": "DRAW"}
+
         # Switch to the next player
         self.current_player = -self.current_player
-        
+
         # Update valid moves
         self.valid_moves = self._get_valid_moves()
-        
-        # Return observation, reward, done flags, and info
+
+        #  Ensure reward is always defined in every return path
         return self._get_observation(), float(reward), False, False, {}
+
     
     def _get_observation(self) -> Dict[str, np.ndarray]:
         """Returns the current observation."""
