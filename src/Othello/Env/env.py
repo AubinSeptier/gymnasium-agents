@@ -3,8 +3,6 @@ from gymnasium import spaces
 import numpy as np
 from typing import Tuple, List, Dict, Any, Optional
 
-
-# Constants
 BLACK = 1
 WHITE = -1
 EMPTY = 0
@@ -44,7 +42,6 @@ class OthelloEnv(gym.Env):
         self.selected_y = None
         self.cumulative_rewards = {"BLACK": 0, "WHITE": 0}
         
-        # Reset to initialize values
         self.reset()
     
     def reset(self, seed=None, options=None):
@@ -57,23 +54,17 @@ class OthelloEnv(gym.Env):
         self.board[4][3] = BLACK
         self.board[4][4] = WHITE
         
-        # Black starts
         self.current_player = BLACK
         
-        # Reset the done state
         self.done = False
         
-        # Calculate valid moves
         self.valid_moves = self._get_valid_moves()
         
-        # Initial position of the selection cursor (centered)
         self.selected_x = 3
         self.selected_y = 3
         
-        # Reset cumulative rewards
         self.cumulative_rewards = {"BLACK": 0, "WHITE": 0}
         
-        # Return the initial observation and information
         return self._get_observation(), {}
     
     def step(self, action: int) -> Tuple[Dict[str, np.ndarray], float, bool, bool, Dict[str, Any]]:
@@ -81,12 +72,9 @@ class OthelloEnv(gym.Env):
         row, col = action // BOARD_SIZE, action % BOARD_SIZE
         reward = 0
         
-        # Check if the action is valid
         if not self._is_valid_move(row, col):
-            # Invalid action, end the episode with negative reward
             return self._get_observation(), -10.0, False, True, {"info": "Invalid move"}
         
-        # Perform the action (place a piece)
         self._place_piece(row, col)
         
         # Calculate the reward (number of captured pieces)
@@ -101,7 +89,6 @@ class OthelloEnv(gym.Env):
         # Switch to the next player
         self.current_player = -self.current_player
         
-        # Update valid moves
         self.valid_moves = self._get_valid_moves()
         
         # If the current player has no valid moves, skip their turn
@@ -116,13 +103,11 @@ class OthelloEnv(gym.Env):
         
         # Check if the game is over
         terminated = self.done
-        truncated = False  # We are not using step limit
+        truncated = False 
         
-        # Update the selection cursor position to be on a valid move if possible
         if not terminated and self.valid_moves:
             self.selected_y, self.selected_x = self.valid_moves[0]
         
-        # Additional information
         info = {
             "score_black": black_count,
             "score_white": white_count,
@@ -132,7 +117,6 @@ class OthelloEnv(gym.Env):
         }
         
         if terminated:
-            # Determine the winner at the end of the game
             if black_count > white_count:
                 info["winner"] = "BLACK"
             elif white_count > black_count:
@@ -144,7 +128,6 @@ class OthelloEnv(gym.Env):
     
     def _get_observation(self) -> Dict[str, np.ndarray]:
         """Returns the current observation."""
-        # Convert valid moves to binary array
         valid_moves_array = np.zeros(BOARD_SIZE * BOARD_SIZE, dtype=np.int8)
         for row, col in self.valid_moves:
             valid_moves_array[row * BOARD_SIZE + col] = 1
@@ -187,7 +170,6 @@ class OthelloEnv(gym.Env):
     
     def _is_valid_move(self, row: int, col: int) -> bool:
         """Checks if a move is valid."""
-        # If the cell is not empty, the move is not valid
         if self.board[row][col] != EMPTY:
             return False
         
@@ -205,12 +187,10 @@ class OthelloEnv(gym.Env):
         """Checks if we can capture pieces in a given direction."""
         opponent = -self.current_player
         
-        # Check if there is at least one adjacent opponent piece
         r, c = row + dr, col + dc
         if not (0 <= r < BOARD_SIZE and 0 <= c < BOARD_SIZE and self.board[r][c] == opponent):
             return False
         
-        # Continue in this direction to find a piece of the current player
         r, c = r + dr, c + dc
         while 0 <= r < BOARD_SIZE and 0 <= c < BOARD_SIZE:
             if self.board[r][c] == EMPTY:
@@ -237,7 +217,6 @@ class OthelloEnv(gym.Env):
         if not self._can_capture(row, col, dr, dc):
             return
         
-        # Capture opponent pieces
         r, c = row + dr, col + dc
         while 0 <= r < BOARD_SIZE and 0 <= c < BOARD_SIZE and self.board[r][c] == -self.current_player:
             self.board[r][c] = self.current_player

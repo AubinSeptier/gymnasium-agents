@@ -3,12 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import NamedTuple
 from C4_adapter_only.Env.c4_env import BOARD_ROWS, BOARD_COLS
-from C4_adapter_only.Env.c4_env import RED, YELLOW, EMPTY
+from C4_adapter_only.Env.c4_env import RED, YELLOW
 import numpy as np
 import math
-
-
-
 import copy
 
 

@@ -1,7 +1,6 @@
 import pygame
 import sys
-import numpy as np
-from Othello.Env.env import OthelloEnv, BLACK, WHITE, EMPTY, BOARD_SIZE
+from Othello.Env.env import OthelloEnv, BLACK, WHITE, BOARD_SIZE
 
 # Constants for the graphical interface
 SQUARE_SIZE = 60
@@ -21,12 +20,10 @@ VALID_MOVE_COLOR = (0, 255, 0, 150)  # Semi-transparent green
 
 class OthelloGame:
     def __init__(self):
-        # Initialize Pygame
         pygame.init()
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
         pygame.display.set_caption("Othello - Human Play")
         
-        # Create the environment
         self.env = OthelloEnv(render_mode="human")
         
         # Initialize fonts
@@ -50,7 +47,6 @@ class OthelloGame:
         self.game_over = False
         self.winner = None
         
-        # Reset the environment
         self.obs, _ = self.env.reset()
     
     def draw_board(self):
@@ -65,11 +61,9 @@ class OthelloGame:
             pygame.draw.line(self.screen, LINE_COLOR, (0, i * SQUARE_SIZE), 
                              (BOARD_WIDTH, i * SQUARE_SIZE), 2)
         
-        # Get the current state
         board = self.obs["board"]
         valid_moves_array = self.obs["valid_moves"]
         
-        # Convert the valid_moves array to a list of tuples
         valid_moves = []
         for i in range(len(valid_moves_array)):
             if valid_moves_array[i] == 1:
@@ -103,11 +97,9 @@ class OthelloGame:
         pygame.draw.rect(self.screen, INFO_PANEL_COLOR, 
                          (BOARD_WIDTH, 0, INFO_PANEL_WIDTH, WINDOW_HEIGHT))
         
-        # Title
         title = self.title_font.render("OTHELLO", True, TEXT_COLOR)
         self.screen.blit(title, (BOARD_WIDTH + INFO_PANEL_WIDTH // 2 - title.get_width() // 2, 20))
         
-        # Score
         black_count, white_count = self.env._get_score()
         
         score_title = self.info_font.render("SCORE", True, TEXT_COLOR)
@@ -194,9 +186,7 @@ class OthelloGame:
                             self.env.move_selection("right")
                         
                         elif event.key == pygame.K_SPACE:
-                            # Check if the selection is valid
                             if self.env.is_selected_valid():
-                                # Play the move
                                 action = self.env.get_selected_position()
                                 self.obs, reward, terminated, truncated, info = self.env.step(action)
                                 self.last_reward = reward
@@ -206,17 +196,13 @@ class OthelloGame:
                                     self.game_over = True
                                     self.winner = info.get("winner", None)
             
-            # Draw the game
             self.draw_board()
             self.draw_info_panel()
             
-            # Update the display
             pygame.display.flip()
             
-            # Limit the frame rate
             self.clock.tick(60)
         
-        # Quit Pygame
         pygame.quit()
         sys.exit()
 

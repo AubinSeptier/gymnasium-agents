@@ -18,22 +18,17 @@ def evaluate_connect_four_agent(agent, opponent, num_games=100, render=False):
         
         # Play the game
         while not done:
-            # Determine which agent plays (RED starts)
             current_player = obs["current_player"]
             current_agent = agent if current_player == 0 else opponent  # 0 for RED, 1 for YELLOW
             
-            # Choose an action
             action = agent.choose_action(env)
             if isinstance(action, tuple):
-                action = action[0]  # Ensure it's an integer
+                action = action[0]  
 
-            
-            # Execute the action
             obs, reward, terminated, truncated, info = env.step(action)
             done = terminated or truncated
             
-            # Accumulate the reward (from the perspective of the evaluated agent)
-            if current_player == 0:  # If our agent played
+            if current_player == 0:  
                 game_reward += reward
         
         # Analyze the result
@@ -56,7 +51,6 @@ def evaluate_connect_four_agent(agent, opponent, num_games=100, render=False):
         
         total_rewards += game_reward
     
-    # Calculate statistics
     win_rate = wins / num_games
     avg_reward = total_rewards / num_games
     

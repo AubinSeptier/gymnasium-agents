@@ -1,13 +1,12 @@
-import numpy as np
 import torch
 from Othello.Env.env import OthelloEnv
-from Agents.alpha_zero.mcts_alpha_zero import MCTSAgent, BOARD_SIZE
+from Agents.alpha_zero.mcts_alpha_zero import MCTSAgent
 
 def self_play_game(agent: MCTSAgent, env: OthelloEnv):
     states = []
     policies = []
     players = []
-    rewards = []  # List to accumulate rewards per move
+    rewards = []  
 
     obs, _ = env.reset()
     done = False
@@ -38,11 +37,3 @@ def self_play_game(agent: MCTSAgent, env: OthelloEnv):
 
     total_reward = sum(rewards)
     return training_examples, total_reward
-
-# Example usage:
-if __name__ == "__main__":
-    # Create environment and agent instances here to test
-    env = OthelloEnv()
-    # Suppose agent is already instantiated (MCTSAgent with a network)
-    # training_examples, total_reward = self_play_game(agent, env)
-    # print("Total reward for this game:", total_reward)

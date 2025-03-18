@@ -1,12 +1,10 @@
 import pygame
 import time
-import numpy as np
 from C4_adapter_only.Env.c4_env import ConnectFourEnv, BOARD_ROWS, BOARD_COLS, RED, YELLOW, EMPTY
 
 
 def visualize_connect_four_game(agent1, agent2, delay=0.5):
     """Visualize a game of Connect Four between two agents."""
-    # Pygame configuration
     pygame.init()
     
     # Constants for the graphical interface
@@ -58,18 +56,15 @@ def visualize_connect_four_game(agent1, agent2, delay=0.5):
             center_x = col * SQUARE_SIZE + SQUARE_SIZE // 2
             center_y = SQUARE_SIZE // 2
             
-            # Highlight valid moves
             if obs["valid_moves"][col] == 1:
                 screen.blit(valid_move_surface, (col * SQUARE_SIZE, 0))
             
-            # Draw column numbers
             col_num = info_font.render(str(col), True, TEXT_COLOR)
             screen.blit(col_num, (center_x - col_num.get_width()//2, center_y - col_num.get_height()//2))
         
-        # Draw the board (blue rectangle with circular holes)
+        # Draw the board
         pygame.draw.rect(screen, BOARD_COLOR, (0, SQUARE_SIZE, BOARD_WIDTH, BOARD_HEIGHT))
         
-        # Get the current state
         board = obs["board"]
         
         # Draw the grid and pieces
@@ -92,15 +87,12 @@ def visualize_connect_four_game(agent1, agent2, delay=0.5):
         pygame.draw.rect(screen, INFO_PANEL_COLOR, 
                          (BOARD_WIDTH, 0, INFO_PANEL_WIDTH, WINDOW_HEIGHT))
         
-        # Title
         title = title_font.render("CONNECT FOUR", True, TEXT_COLOR)
         screen.blit(title, (BOARD_WIDTH + INFO_PANEL_WIDTH // 2 - title.get_width() // 2, 20))
         
-        # Agents
         agents_title = info_font.render(f"{agent1.name} (Red) vs {agent2.name} (Yellow)", True, TEXT_COLOR)
         screen.blit(agents_title, (BOARD_WIDTH + INFO_PANEL_WIDTH // 2 - agents_title.get_width() // 2, 60))
         
-        # Score (pieces count)
         red_count, yellow_count = env._get_score()
         
         score_title = info_font.render("PIECES", True, TEXT_COLOR)
@@ -112,13 +104,11 @@ def visualize_connect_four_game(agent1, agent2, delay=0.5):
         score_yellow = score_font.render(f"Yellow: {yellow_count}", True, YELLOW_COLOR)
         screen.blit(score_yellow, (BOARD_WIDTH + 20, 160))
         
-        # Current player's turn
         current_player = "Red" if obs["current_player"] == 0 else "Yellow"
         current_agent = agent1.name if obs["current_player"] == 0 else agent2.name
         player_text = info_font.render(f"Turn: {current_player} ({current_agent})", True, TEXT_COLOR)
         screen.blit(player_text, (BOARD_WIDTH + 20, 200))
         
-        # Cumulative rewards
         reward_title = info_font.render("REWARDS", True, TEXT_COLOR)
         screen.blit(reward_title, (BOARD_WIDTH + INFO_PANEL_WIDTH // 2 - reward_title.get_width() // 2, 240))
         
@@ -128,7 +118,6 @@ def visualize_connect_four_game(agent1, agent2, delay=0.5):
         reward_yellow = info_font.render(f"Yellow: {yellow_reward:.1f}", True, TEXT_COLOR)
         screen.blit(reward_yellow, (BOARD_WIDTH + 20, 300))
         
-        # Action history
         history_title = info_font.render("LAST ACTIONS", True, TEXT_COLOR)
         screen.blit(history_title, (BOARD_WIDTH + INFO_PANEL_WIDTH // 2 - history_title.get_width() // 2, 340))
         
@@ -168,7 +157,6 @@ def visualize_connect_four_game(agent1, agent2, delay=0.5):
                 
                 screen.blit(result_text, (BOARD_WIDTH + INFO_PANEL_WIDTH // 2 - result_text.get_width() // 2, 560))
     
-    # Main visualization loop
     running = True
     auto_play = False
     last_action_time = 0
@@ -194,34 +182,26 @@ def visualize_connect_four_game(agent1, agent2, delay=0.5):
         # Automatic mode or manual action
         if (auto_play and current_time - last_action_time > delay) or (not auto_play and last_action_time == 0):
             if not done:
-                # Determine which agent plays
                 current_player = obs["current_player"]
                 current_agent = agent1 if current_player == 0 else agent2
                 
-                # Choose an action
                 action = current_agent.choose_action(env)
                 
-                # Execute the action
                 next_obs, reward, terminated, truncated, info = env.step(action)
                 
-                # Record the action in the history
                 actions_history.append((action, current_player))
                 
-                # Update rewards
                 if current_player == 0:  # RED
                     red_reward += reward
                 else:  # YELLOW
                     yellow_reward += reward
                 
-                # Update environment info for displaying winner
                 if terminated:
                     env.info = info
                 
-                # Update the state
                 obs = next_obs
                 done = terminated or truncated
                 
-                # Update the time of the last action
                 last_action_time = current_time
             else:
                 # Game over, wait before continuing
@@ -229,15 +209,9 @@ def visualize_connect_four_game(agent1, agent2, delay=0.5):
                     time.sleep(3)
                     running = False
         
-        # Draw the game
         draw_board()
         draw_info_panel()
-        
-        # Update the display
         pygame.display.flip()
-        
-        # Limit the frame rate
         clock.tick(60)
     
-    # Quit pygame
     pygame.quit()

@@ -1,7 +1,7 @@
 import numpy as np
 import copy
 import random
-from typing import List, Tuple
+from typing import List
 from Othello.Agents.mcts import MCTSNode, MCTSAgent as OthelloMCTSAgent
 from C4_adapter_only.Env.c4_env import RED, YELLOW, EMPTY
 
@@ -49,7 +49,6 @@ class ConnectFourMCTSNode(MCTSNode):
             for col in range(self.env.board.shape[1]):
                 if self.env.board[row][col] != EMPTY:
                     if self.env._check_win(row, col):
-                        # The player who has a winning position
                         winner = self.env.board[row][col]
                         return 1.0 if (winner == RED and self.current_player == 1) or \
                                       (winner == YELLOW and self.current_player == -1) else -1.0
@@ -58,27 +57,24 @@ class ConnectFourMCTSNode(MCTSNode):
         if np.all(self.env.board != EMPTY):
             return 0.0
             
-        # This should not happen for terminal nodes
+        # Otherwise, not terminal
         return 0.0
     
     def expand(self) -> 'ConnectFourMCTSNode':
         """Adds a new child to the node by randomly choosing an unexplored action."""
         untried_actions = self._get_untried_actions()
         if not untried_actions:
-            return self  # No actions to explore
+            return self  
             
         action = untried_actions.pop()
-        self.untried_actions = untried_actions  # Update unexplored actions
-        
-        # Copy the environment and apply the action
+        self.untried_actions = untried_actions  
+    
         new_env = copy.deepcopy(self.env)
         _, _, _, _, _ = new_env.step(action)
         
-        # Create a new node - IMPORTANT: use ConnectFourMCTSNode not MCTSNode
         child_node = ConnectFourMCTSNode(new_env, parent=self, action=action)
         self.children.append(child_node)
         
-        # Check if all actions have been explored
         if not self.untried_actions:
             self.fully_expanded = True
             
@@ -88,10 +84,10 @@ class ConnectFourMCTSNode(MCTSNode):
         """Simulates a game from this state to a terminal state by choosing random actions."""
         # Local copy of the environment for simulation
         sim_env = copy.deepcopy(self.env)
-        sim_player = 1 if sim_env.current_player == RED else -1  # Keep track of initial player
+        sim_player = 1 if sim_env.current_player == RED else -1  
         
         # Limit the number of steps to avoid infinite loops
-        max_steps = 42  # Maximum possible moves in Connect Four (7*6)
+        max_steps = 42  
         step_count = 0
         
         while step_count < max_steps:
@@ -99,14 +95,11 @@ class ConnectFourMCTSNode(MCTSNode):
             obs = sim_env._get_observation()
             valid_moves_indices = np.where(obs["valid_moves"] == 1)[0]
             
-            # If no valid moves, the game is over
             if len(valid_moves_indices) == 0:
                 break
             
-            # Choose a random action (faster with numpy)
             action = np.random.choice(valid_moves_indices)
             
-            # Execute the action
             next_obs, _, terminated, _, info = sim_env.step(action)
             step_count += 1
             
@@ -120,7 +113,6 @@ class ConnectFourMCTSNode(MCTSNode):
                 if sim_env.board[row][col] != EMPTY:
                     if sim_env._check_win(row, col):
                         winner = sim_env.board[row][col]
-                        # Return reward from perspective of the player who started the simulation
                         return 1.0 if (winner == RED and sim_player == 1) or \
                                       (winner == YELLOW and sim_player == -1) else -1.0
         
@@ -140,7 +132,6 @@ class ConnectFourMCTSAgent(OthelloMCTSAgent):
             batch_size=batch_size
         )
         
-        # Update name
         self.name = f"Connect4_MCTS_{self.actual_num_simulations}"
     
     def choose_action(self, env):
@@ -149,36 +140,28 @@ class ConnectFourMCTSAgent(OthelloMCTSAgent):
         obs = env._get_observation()
         valid_moves = [i for i, is_valid in enumerate(obs["valid_moves"]) if is_valid == 1]
         
-        # If no valid moves, return a default action
         if not valid_moves:
             return 0
         
-        # If only one valid move, return it immediately
         if len(valid_moves) == 1:
             return valid_moves[0]
         
-        # Create a Connect Four specific MCTS node as the root
         root = ConnectFourMCTSNode(copy.deepcopy(env))
         
         # Run simulations
         for _ in range(self.actual_num_simulations):
             node = root
             
-            # Selection
             while not node.is_terminal() and node.is_fully_expanded():
                 node = node.best_child(self.exploration_weight)
             
-            # Expansion
             if not node.is_terminal() and not node.is_fully_expanded():
                 node = node.expand()
             
-            # Simulation
             result = node.simulate()
             
-            # Backpropagation
             node.backpropagate(result)
         
-        # If no children were created (shouldn't happen with fixed expand method)
         if not root.children:
             return random.choice(valid_moves)
             

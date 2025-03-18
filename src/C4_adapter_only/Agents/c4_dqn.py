@@ -1,10 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
 from typing import Tuple
 from Othello.Agents.dqn import DQNAgent as OthelloDQNAgent
-from C4_adapter_only.Env.c4_env import BOARD_ROWS, BOARD_COLS, RED, YELLOW, EMPTY
+from C4_adapter_only.Env.c4_env import BOARD_ROWS, BOARD_COLS
 
 
 class ConnectFourDQNModel(nn.Module):
@@ -29,16 +28,13 @@ class ConnectFourDQNModel(nn.Module):
         self.fc3 = nn.Linear(128, action_size)
     
     def forward(self, board, valid_moves, player):
-        # Process the board by CNN
         x = F.relu(self.bn1(self.conv1(board)))
         x = F.relu(self.bn2(self.conv2(x)))
         x = F.relu(self.bn3(self.conv3(x)))
-        x = x.view(x.size(0), -1)  # Flatten
+        x = x.view(x.size(0), -1)  
         
-        # Concatenate with valid moves and current player
         x = torch.cat([x, valid_moves, player], dim=1)
         
-        # Dense layers
         x = F.relu(self.bn4(self.fc1(x)))
         x = F.relu(self.fc2(x))
         q_values = self.fc3(x)
@@ -68,7 +64,6 @@ class ConnectFourDQNAgent(OthelloDQNAgent):
         update_target_freq: int = 10,
         reward_scale: float = 1.0,
     ):
-        # Initialize with Connect Four specific dimensions
         super().__init__(
             state_shape=state_shape,
             action_size=action_size,
@@ -83,26 +78,20 @@ class ConnectFourDQNAgent(OthelloDQNAgent):
             reward_scale=reward_scale,
         )
         
-        # Override the models to use Connect Four specific models
         self.model = ConnectFourDQNModel(state_shape, action_size).to(self.device)
         self.target_model = ConnectFourDQNModel(state_shape, action_size).to(self.device)
         self.update_target_model()
         
-        # Update optimizer to use new model parameters
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
 
-        # Update name
         self.name = "Connect4_DQN"
     
     def preprocess_state(self, obs):
         """Preprocesses the observation for the neural network."""
-        # Normalize the board (-1, 0, 1) -> (-1, 0, 1)
         board = torch.tensor(obs["board"], dtype=torch.float32).reshape(1, 1, *self.state_shape).to(self.device)
         
-        # Valid moves - Connect Four has fewer valid moves (only columns)
         valid_moves = torch.tensor(obs["valid_moves"], dtype=torch.float32).reshape(1, -1).to(self.device)
         
-        # Current player
         player = torch.tensor([1.0 if obs["current_player"] == 0 else -1.0], dtype=torch.float32).reshape(1, 1).to(self.device)
         
         return board, valid_moves, player

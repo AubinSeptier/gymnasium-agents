@@ -3,8 +3,6 @@ from gymnasium import spaces
 import numpy as np
 from typing import Tuple, List, Dict, Any, Optional
 
-
-# Constants
 RED = 1      # First player
 YELLOW = -1  # Second player
 EMPTY = 0
@@ -43,56 +41,41 @@ class ConnectFourEnv(gym.Env):
         self.selected_col = None
         self.cumulative_rewards = {"RED": 0, "YELLOW": 0}
         
-        # Reset to initialize values
         self.reset()
     
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
         
-        # Initialize the board (empty)
         self.board = np.zeros((BOARD_ROWS, BOARD_COLS), dtype=np.int8)
         
-        # RED starts
         self.current_player = RED
         
-        # Reset the done state
         self.done = False
         
-        # Calculate valid moves
         self.valid_moves = self._get_valid_moves()
         
-        # Initial position of the selection cursor (centered)
         self.selected_col = BOARD_COLS // 2
         
-        # Reset cumulative rewards
         self.cumulative_rewards = {"RED": 0, "YELLOW": 0}
         
-        # Return the initial observation and information
         return self._get_observation(), {}
     
     def step(self, action: int) -> Tuple[Dict[str, np.ndarray], float, bool, bool, Dict[str, Any]]:
-        # Action is the column (0-6) where the piece will be dropped
         col = action
-        reward = 0  #  Explicitly initialize reward
-
-        # Check if the action is valid
+        reward = 0 
+        
         if not self._is_valid_move(col):
-            # Invalid action, end the episode with negative reward
             reward = -10.0
             return self._get_observation(), float(reward), False, True, {"info": "Invalid move"}
 
-        # Find the row where the piece will land
         row = self._get_next_open_row(col)
 
-        # Place the piece
         self.board[row][col] = self.current_player
 
-        # Check if the current player won
         if self._check_win(row, col):
             self.done = True
-            reward = 1.0  # Winning reward
+            reward = 1.0 
             
-            # Update cumulative rewards
             if self.current_player == RED:
                 self.cumulative_rewards["RED"] += reward
             else:
@@ -105,22 +88,18 @@ class ConnectFourEnv(gym.Env):
         # Check if board is full (draw)
         if np.all(self.board != EMPTY):
             self.done = True
-            reward = 0.0  #  Explicitly set reward for draws
+            reward = 0.0  
             return self._get_observation(), float(reward), True, False, {"winner": "DRAW"}
 
-        # Switch to the next player
         self.current_player = -self.current_player
 
-        # Update valid moves
         self.valid_moves = self._get_valid_moves()
 
-        #  Ensure reward is always defined in every return path
         return self._get_observation(), float(reward), False, False, {}
 
     
     def _get_observation(self) -> Dict[str, np.ndarray]:
         """Returns the current observation."""
-        # Convert valid moves to binary array
         valid_moves_array = np.zeros(BOARD_COLS, dtype=np.int8)
         for col in self.valid_moves:
             valid_moves_array[col] = 1
@@ -171,7 +150,6 @@ class ConnectFourEnv(gym.Env):
             if self.board[row][col] == EMPTY:
                 return row
         
-        # This should never happen if _is_valid_move is called first
         return -1
     
     def _check_win(self, row: int, col: int) -> bool:

@@ -1,12 +1,13 @@
 import numpy as np
 import random
 from collections import deque
-from typing import List, Tuple, Dict, Any, Optional
+from typing import List, Tuple, Dict, Any
+import pickle
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from Othello.Env.env import OthelloEnv, BLACK, WHITE, EMPTY, BOARD_SIZE
+from Othello.Env.env import OthelloEnv, BOARD_SIZE
 
 class DQNModel(nn.Module):
     def __init__(self, state_shape: Tuple[int, int] = (BOARD_SIZE, BOARD_SIZE), action_size: int = BOARD_SIZE * BOARD_SIZE):
@@ -30,16 +31,13 @@ class DQNModel(nn.Module):
         self.fc3 = nn.Linear(128, action_size)
     
     def forward(self, board, valid_moves, player):
-        # Process the board by CNN
         x = F.relu(self.bn1(self.conv1(board)))
         x = F.relu(self.bn2(self.conv2(x)))
         x = F.relu(self.bn3(self.conv3(x)))
-        x = x.view(x.size(0), -1)  # Flatten
+        x = x.view(x.size(0), -1)  
         
-        # Concatenate with valid moves and current player
         x = torch.cat([x, valid_moves, player], dim=1)
         
-        # Dense layers
         x = F.relu(self.bn4(self.fc1(x)))
         x = F.relu(self.fc2(x))
         q_values = self.fc3(x)
@@ -81,24 +79,17 @@ class DQNAgent:
         self.update_target_freq = update_target_freq  # Target network update frequency
         self.reward_scale = reward_scale  # Reward scaling factor
         
-        # Check if CUDA is available
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
-        # Step counter
         self.step_counter = 0
         
         # Models
         self.model = DQNModel(state_shape, action_size).to(self.device)
         self.target_model = DQNModel(state_shape, action_size).to(self.device)
         self.update_target_model()  # Synchronize the two models
-        
-        # Optimizer
+
         self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
-        
-        # Loss function
         self.criterion = nn.MSELoss()
-        
-        # Name for identification
         self.name = "DQN"
     
     def update_target_model(self) -> None:
@@ -107,13 +98,10 @@ class DQNAgent:
     
     def preprocess_state(self, obs: Dict[str, np.ndarray]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Preprocesses the observation for the neural network."""
-        # Normalize the board (-1, 0, 1) -> (-1, 0, 1)
         board = torch.tensor(obs["board"], dtype=torch.float32).reshape(1, 1, *self.state_shape).to(self.device)
-        
-        # Valid moves
+
         valid_moves = torch.tensor(obs["valid_moves"], dtype=torch.float32).reshape(1, -1).to(self.device)
-        
-        # Current player
+
         player = torch.tensor([1.0 if obs["current_player"] == 0 else -1.0], dtype=torch.float32).reshape(1, 1).to(self.device)
         
         return board, valid_moves, player
@@ -155,12 +143,9 @@ class DQNAgent:
         if len(self.memory) < self.batch_size:
             return 0.0
         
-        # Sample a batch from memory
         minibatch = random.sample(self.memory, self.batch_size)
-        
         total_loss = 0.0
-        
-        # Prepare batch tensors
+    
         states_boards = []
         states_valid_moves = []
         states_players = []
@@ -200,11 +185,9 @@ class DQNAgent:
         next_states_players = torch.cat(next_states_players, dim=0)
         dones = torch.tensor(dones, dtype=torch.float32).to(self.device)
         
-        # Predict Q-values for current states
+        # Predict and Select Q-values for current states
         self.model.train()
         current_q_values = self.model(states_boards, states_valid_moves, states_players)
-        
-        # Select Q-values for the taken actions
         current_q_values = current_q_values.gather(1, actions.unsqueeze(1)).squeeze(1)
         
         # Calculate target Q-values
@@ -212,11 +195,8 @@ class DQNAgent:
             next_q_values = self.target_model(next_states_boards, next_states_valid_moves, next_states_players)
             max_next_q_values = next_q_values.max(1)[0]
             target_q_values = rewards + (1 - dones) * self.gamma * max_next_q_values
-        
-        # Calculate loss
+
         loss = self.criterion(current_q_values, target_q_values)
-        
-        # Update weights
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
@@ -309,7 +289,6 @@ class DQNAgent:
             avg_loss = np.mean(episode_losses) if episode_losses else 0
             losses.append(avg_loss)
 
-            # ✅ Improved Logging (every 10 episodes)
             if (episode + 1) % 10 == 0:
                 print(f"Episode {episode + 1}/{num_episodes}")
                 print(f"   Opponent: {opponent_name}")
@@ -325,7 +304,6 @@ class DQNAgent:
         torch.save(self.model.state_dict(), filename + ".pt")
         
         # Save additional parameters
-        import pickle
         with open(filename + ".pkl", 'wb') as f:
             pickle.dump({
                 'epsilon': self.epsilon,
@@ -344,7 +322,6 @@ class DQNAgent:
         self.target_model.load_state_dict(torch.load(filename + ".pt"))
         
         # Load parameters
-        import pickle
         with open(filename + ".pkl", 'rb') as f:
             params = pickle.load(f)
             self.epsilon = params['epsilon']
