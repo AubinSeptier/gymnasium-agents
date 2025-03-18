@@ -1,5 +1,6 @@
 import numpy as np
 import copy
+import random
 from typing import List, Tuple
 from Othello.Agents.mcts import MCTSNode, MCTSAgent as OthelloMCTSAgent
 from C4_adapter_only.Env.c4_env import RED, YELLOW, EMPTY
@@ -23,82 +24,77 @@ class ConnectFourMCTSNode(MCTSNode):
     def is_terminal(self) -> bool:
         """Checks if this state is terminal (win, loss, or draw)."""
         if self.terminal is None:
-            # Check first for a win - look at the last move if available
-            if self.action is not None:
-                # Find the row where the piece landed
-                col = self.action
-                # We need to find which row the piece landed in
-                for row in range(self.env.board.shape[0]):
+            # Check for a win
+            for row in range(self.env.board.shape[0]):
+                for col in range(self.env.board.shape[1]):
                     if self.env.board[row][col] != EMPTY:
                         if self.env._check_win(row, col):
                             self.terminal = True
                             return True
-                        break
             
-            # If no win, check if board is full
+            # Check if board is full
             if np.all(self.env.board != EMPTY):
                 self.terminal = True
                 return True
-            
-            # If no valid moves, it's terminal
-            obs = self.env._get_observation()
-            self.terminal = np.sum(obs["valid_moves"]) == 0
+                
+            # Otherwise, not terminal
+            self.terminal = False
         
         return self.terminal
-    
-
+        
     def get_reward(self) -> float:
         """Returns the reward for this terminal state."""
-        # Check if the last move caused a win
-        if self.action is not None:
-            col = self.action
-            for row in range(self.env.board.shape[0]):
+        # Check for a win
+        for row in range(self.env.board.shape[0]):
+            for col in range(self.env.board.shape[1]):
                 if self.env.board[row][col] != EMPTY:
                     if self.env._check_win(row, col):
-                        # The current_player of the node is the one who made the move
-                        return 1.0 if self.env.board[row][col] == RED else -1.0
-                    break
-        # Check for draw
+                        # The player who has a winning position
+                        winner = self.env.board[row][col]
+                        return 1.0 if (winner == RED and self.current_player == 1) or \
+                                      (winner == YELLOW and self.current_player == -1) else -1.0
+        
+        # If board is full, it's a draw
         if np.all(self.env.board != EMPTY):
             return 0.0
-        # Fallback to original reward calculation based on scores (if needed)
-        red_count, yellow_count = self.env._get_score()
-        if red_count > yellow_count:
-            return 1.0 if self.current_player == 1 else -1.0
-        elif yellow_count > red_count:
-            return -1.0 if self.current_player == 1 else 1.0
-        else:
-            return 0.0
-    def get_reward(self) -> float:
-        """Returns the reward for this terminal state."""
-        # Need to check if this is a win, loss, or draw
-        # First check for a win by examining the last move
-        if self.action is not None:
-            col = self.action
-            # Find which row the piece landed in
-            for row in range(self.env.board.shape[0]):
-                if self.env.board[row][col] != EMPTY:
-                    if self.env._check_win(row, col):
-                        # If this player won, return positive reward
-                        last_player = self.env.board[row][col]
-                        player_won = 1 if last_player == RED else -1
-                        return 1.0 if player_won == self.current_player else -1.0
-                    break
-        
-        # If no win, it's a draw
+            
+        # This should not happen for terminal nodes
         return 0.0
+    
+    def expand(self) -> 'ConnectFourMCTSNode':
+        """Adds a new child to the node by randomly choosing an unexplored action."""
+        untried_actions = self._get_untried_actions()
+        if not untried_actions:
+            return self  # No actions to explore
+            
+        action = untried_actions.pop()
+        self.untried_actions = untried_actions  # Update unexplored actions
+        
+        # Copy the environment and apply the action
+        new_env = copy.deepcopy(self.env)
+        _, _, _, _, _ = new_env.step(action)
+        
+        # Create a new node - IMPORTANT: use ConnectFourMCTSNode not MCTSNode
+        child_node = ConnectFourMCTSNode(new_env, parent=self, action=action)
+        self.children.append(child_node)
+        
+        # Check if all actions have been explored
+        if not self.untried_actions:
+            self.fully_expanded = True
+            
+        return child_node
     
     def simulate(self) -> float:
         """Simulates a game from this state to a terminal state by choosing random actions."""
         # Local copy of the environment for simulation
         sim_env = copy.deepcopy(self.env)
-        terminated = False
+        sim_player = 1 if sim_env.current_player == RED else -1  # Keep track of initial player
         
         # Limit the number of steps to avoid infinite loops
         max_steps = 42  # Maximum possible moves in Connect Four (7*6)
         step_count = 0
         
-        while not terminated and step_count < max_steps:
+        while step_count < max_steps:
             # Get valid moves efficiently
             obs = sim_env._get_observation()
             valid_moves_indices = np.where(obs["valid_moves"] == 1)[0]
@@ -111,29 +107,24 @@ class ConnectFourMCTSNode(MCTSNode):
             action = np.random.choice(valid_moves_indices)
             
             # Execute the action
-            _, _, terminated, _, info = sim_env.step(action)
+            next_obs, _, terminated, _, info = sim_env.step(action)
             step_count += 1
             
-            # Check if this move resulted in a win
-            if terminated and "winner" in info:
-                if info["winner"] == "RED":
-                    return 1.0 if self.current_player == 1 else -1.0
-                elif info["winner"] == "YELLOW":
-                    return -1.0 if self.current_player == 1 else 1.0
-                else:  # Draw
-                    return 0.0
+            # Check if the game is over
+            if terminated:
+                break
         
-        # If we reached here without a clear winner, determine based on the board state
-        # First, check if anyone has connected four
+        # Evaluate final state
         for row in range(sim_env.board.shape[0]):
             for col in range(sim_env.board.shape[1]):
                 if sim_env.board[row][col] != EMPTY:
                     if sim_env._check_win(row, col):
                         winner = sim_env.board[row][col]
-                        return 1.0 if (winner == RED and self.current_player == 1) or \
-                                    (winner == YELLOW and self.current_player == -1) else -1.0
+                        # Return reward from perspective of the player who started the simulation
+                        return 1.0 if (winner == RED and sim_player == 1) or \
+                                      (winner == YELLOW and sim_player == -1) else -1.0
         
-        # If no one has connected four, it's a draw
+        # If no win, it's a draw
         return 0.0
 
 
@@ -141,7 +132,7 @@ class ConnectFourMCTSAgent(OthelloMCTSAgent):
     """MCTS Agent adapted for Connect Four."""
     
     def __init__(self, num_simulations: int = 800, exploration_weight: float = 1.4, 
-                 num_processes: int = None, batch_size: int = None):
+                 num_processes: int = 1, batch_size: int = None):
         super().__init__(
             num_simulations=num_simulations,
             exploration_weight=exploration_weight,
@@ -153,7 +144,7 @@ class ConnectFourMCTSAgent(OthelloMCTSAgent):
         self.name = f"Connect4_MCTS_{self.actual_num_simulations}"
     
     def choose_action(self, env):
-        """Chooses the best action according to parallelized MCTS."""
+        """Chooses the best action according to MCTS."""
         # Check if valid actions exist
         obs = env._get_observation()
         valid_moves = [i for i, is_valid in enumerate(obs["valid_moves"]) if is_valid == 1]
@@ -187,6 +178,10 @@ class ConnectFourMCTSAgent(OthelloMCTSAgent):
             # Backpropagation
             node.backpropagate(result)
         
+        # If no children were created (shouldn't happen with fixed expand method)
+        if not root.children:
+            return random.choice(valid_moves)
+            
         # Select the action with the most visits
         best_child = max(root.children, key=lambda child: child.visits)
         return best_child.action
