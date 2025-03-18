@@ -23,7 +23,10 @@ def evaluate_connect_four_agent(agent, opponent, num_games=100, render=False):
             current_agent = agent if current_player == 0 else opponent  # 0 for RED, 1 for YELLOW
             
             # Choose an action
-            action = current_agent.choose_action(env)
+            action = agent.choose_action(env)
+            if isinstance(action, tuple):
+                action = action[0]  # Ensure it's an integer
+
             
             # Execute the action
             obs, reward, terminated, truncated, info = env.step(action)

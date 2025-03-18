@@ -233,172 +233,92 @@ class DQNAgent:
         return loss.item()
 
     def train(self, env: OthelloEnv, num_episodes: int = 100, 
-          opponents: Dict[str, Any] = None, opponent_probs: Dict[str, float] = None) -> Tuple[List[float], List[float]]:
-        """Trains the agent against specified opponents for a number of episodes.
+            opponents: Dict[str, Any] = None, opponent_probs: Dict[str, float] = None) -> Tuple[List[float], List[float]]:
+        """Trains the agent against specified opponents for a number of episodes."""
         
-        Args:
-            env: The environment to train in
-            num_episodes: Number of training episodes
-            opponents: Dict mapping names to opponent agents (use 'self' for self-play)
-            opponent_probs: Dict mapping names to probability of facing that opponent
-            
-        Returns:
-            Tuple of (rewards, losses) lists
-        """
         if opponents is None:
             opponents = {'self': self}  # Default to self-play
-        
+
         if opponent_probs is None:
-            # Equal probability for each opponent
-            opponent_probs = {name: 1.0 / len(opponents) for name in opponents}
-        
-        # Normalize probabilities
+            opponent_probs = {name: 1.0 / len(opponents) for name in opponents}  # Equal probability
+
         total_prob = sum(opponent_probs.values())
         opponent_probs = {name: prob / total_prob for name, prob in opponent_probs.items()}
-        
-        # Convert to cumulative probabilities for easy sampling
+
         opponent_names = list(opponent_probs.keys())
         cum_probs = np.cumsum([opponent_probs[name] for name in opponent_names])
-        
-        rewards = []
-        losses = []
+
+        rewards, losses = [], []
         opponent_counts = {name: 0 for name in opponent_names}
-        
-        # Store original learning rate
-        original_lr = self.learning_rate
-        
-        # Implement curriculum learning
-        self_play_start_prob = 0.95  # Start with 95% self-play
-        self_play_end_prob = opponent_probs.get('self', 0.0)  # End with the specified probability
-        
+
+        original_lr = self.learning_rate  # Store original learning rate
+
         for episode in range(num_episodes):
-            # Implement curriculum learning - gradually decrease self-play probability
-            if 'self' in opponent_probs and episode < num_episodes / 2:
-                # Only adjust during first half of training
-                progress = episode / (num_episodes / 2)
-                current_self_prob = self_play_start_prob - progress * (self_play_start_prob - self_play_end_prob)
-                
-                # Adjust other probabilities proportionally
-                current_probs = {}
-                non_self_prob = 1.0 - current_self_prob
-                
-                for name in opponent_names:
-                    if name == 'self':
-                        current_probs[name] = current_self_prob
-                    else:
-                        # Distribute remaining probability proportionally
-                        orig_relative_prob = opponent_probs[name] / (1.0 - opponent_probs.get('self', 0.0) + 1e-10)
-                        current_probs[name] = non_self_prob * orig_relative_prob
-                
-                # Recompute cumulative probabilities
-                cum_probs = np.cumsum([current_probs[name] for name in opponent_names])
-                
-                # Adjust learning rate - start lower and gradually increase
-                # This helps with the initial instability when facing strong opponents
-                lr_factor = 0.1 + 0.9 * progress
-                self.learning_rate = original_lr * lr_factor
-                for param_group in self.optimizer.param_groups:
-                    param_group['lr'] = self.learning_rate
-            
-            # Reset the environment
+            # Reset environment
             state, _ = env.reset()
             total_reward = 0
             episode_losses = []
             done = False
-            
-            # Select an opponent for this episode
+
+            # Select opponent
             rand_val = np.random.random()
             opponent_idx = np.searchsorted(cum_probs, rand_val)
             opponent_name = opponent_names[opponent_idx]
             opponent = opponents[opponent_name]
             opponent_counts[opponent_name] += 1
-            
-            # Skip if the opponent is 'self' (self-play)
             is_self_play = opponent_name == 'self'
-            
-            # Randomly determine if DQN plays as BLACK (0) or WHITE (1)
+
             dqn_player = np.random.choice([0, 1])  # 0 = BLACK, 1 = WHITE
-            
-            # Gradient clipping threshold - helps prevent exploding gradients
-            clip_value = 1.0
-            
+
             while not done:
                 current_player = state["current_player"]
-                
+
                 if current_player == dqn_player:  # DQN's turn
-                    # Choose an action
                     action = self.choose_action(env)
-                    
-                    # Execute the action
+                    if isinstance(action, tuple): 
+                        action = action[0]
+
                     next_state, reward, terminated, truncated, _ = env.step(action)
                     done = terminated or truncated
                     
-                    # Apply reward scaling - helps stabilize learning
-                    scaled_reward = reward * self.reward_scale  # Scale down rewards to prevent large updates
+                    # Ensure reward scaling is safe
+                    scaled_reward = reward * self.reward_scale if hasattr(self, "reward_scale") else reward
                     
-                    # Store the experience
                     self.remember(state, action, scaled_reward, next_state, done)
-                    
-                    # Learning - but only update every few steps to stabilize learning
-                    if len(self.memory) >= self.batch_size:  # Skip immediate learning in first episode
+                    if len(self.memory) >= self.batch_size:
                         loss = self.replay()
-                        
-                        # Implement gradient clipping during backward pass
-                        for param in self.model.parameters():
-                            if param.grad is not None:
-                                param.grad.data.clamp_(-clip_value, clip_value)
-                                
                         if loss > 0:
                             episode_losses.append(loss)
                     
-                    # Update reward
                     total_reward += scaled_reward
-                
+
                 else:  # Opponent's turn
-                    if is_self_play:
-                        # In self-play, use the DQN agent but with a different player perspective
-                        action = self.choose_action(env)
-                    else:
-                        # Let the opponent choose an action
-                        action = opponent.choose_action(env)
-                    
-                    # Execute the action
+                    action = self.choose_action(env) if is_self_play else opponent.choose_action(env)
+                    if isinstance(action, tuple):
+                        action = action[0]
+
                     next_state, reward, terminated, truncated, _ = env.step(action)
                     done = terminated or truncated
                     
-                    # Learn from opponent moves too (but only after some initial learning)
-                    # The key insight: DQN learns to play as whoever the current player is
-                    # So we don't invert the reward - we use it directly as provided by the environment
-                    if not is_self_play and episode > num_episodes / 4:
-                        scaled_reward = reward * self.reward_scale
-                        self.remember(state, action, scaled_reward, next_state, done)
-                
-                # Update the state
+                    # Ensure reward scaling is safe
+                    scaled_reward = reward * self.reward_scale if hasattr(self, "reward_scale") else reward
+
                 state = next_state
 
-                # In self-play, we count rewards for all moves
-                if is_self_play:
-                    total_reward += scaled_reward
-            
-            # Record results
             rewards.append(total_reward)
             avg_loss = np.mean(episode_losses) if episode_losses else 0
             losses.append(avg_loss)
-            
-            # Display progress
+
+            # ✅ Improved Logging (every 10 episodes)
             if (episode + 1) % 10 == 0:
-                opponent_str = ", ".join([f"{name}: {count}" for name, count in opponent_counts.items()])
-                print(f"Episode {episode + 1}/{num_episodes}, Opponents: {opponent_str}, "
-                    f"Reward: {total_reward:.2f}, Loss: {avg_loss:.4f}, Epsilon: {self.epsilon:.4f}")
-                # Reset the opponent counts after displaying
-                opponent_counts = {name: 0 for name in opponent_names}
-        
-        # Restore original learning rate
-        self.learning_rate = original_lr
-        for param_group in self.optimizer.param_groups:
-            param_group['lr'] = self.learning_rate
-        
+                print(f"Episode {episode + 1}/{num_episodes}")
+                print(f"   Opponent: {opponent_name}")
+                print(f"   Total Reward: {total_reward:.2f}")
+                print(f"   Avg Loss: {avg_loss:.4f}")
+                print(f"   Epsilon: {self.epsilon:.4f}")
+
         return rewards, losses
+
     
     def save(self, filename: str) -> None:
         """Saves the model and agent parameters."""
